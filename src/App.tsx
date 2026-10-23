@@ -30,6 +30,46 @@ export const App: React.FC = () => {
   const isDaiRecapOpen = useStudioStore((state) => state.isDaiRecapOpen);
   const isAppTourOpen = useStudioStore((state) => state.isAppTourOpen);
   const isMixerOpen = useStudioStore((state) => state.isMixerOpen);
+  const initSecureVault = useStudioStore((state) => state.initSecureVault);
+  const isPlaying = useStudioStore((state) => state.isPlaying);
+  const setIsPlaying = useStudioStore((state) => state.setIsPlaying);
+  const setSettingsOpen = useStudioStore((state) => state.setSettingsOpen);
+  const setExportOpen = useStudioStore((state) => state.setExportOpen);
+  const setFindReplaceOpen = useStudioStore((state) => state.setFindReplaceOpen);
+
+  // Initialize secure Windows credential vault on app launch
+  useEffect(() => {
+    initSecureVault();
+  }, [initSecureVault]);
+
+  // Global Studio Keyboard Shortcuts (Space: Play/Pause, Ctrl+S: Export, Ctrl+F: Find, Ctrl+,: Settings)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      const isInput = target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable);
+
+      if (e.key === ' ' && !isInput) {
+        e.preventDefault();
+        setIsPlaying(!isPlaying);
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        setExportOpen(true);
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') {
+        e.preventDefault();
+        setFindReplaceOpen(true);
+      } else if ((e.ctrlKey || e.metaKey) && e.key === ',') {
+        e.preventDefault();
+        setSettingsOpen(true);
+      } else if (e.key === 'Escape') {
+        setSettingsOpen(false);
+        setExportOpen(false);
+        setFindReplaceOpen(false);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isPlaying, setIsPlaying, setExportOpen, setFindReplaceOpen, setSettingsOpen]);
   // Timeline interactive height resizing (ទាញចេញ / ទាញចូល)
   const [timelineHeight, setTimelineHeight] = useState<number>(() => {
     const saved = localStorage.getItem('dubber_timeline_height');

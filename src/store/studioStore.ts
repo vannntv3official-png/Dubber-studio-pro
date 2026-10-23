@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { invoke } from '@tauri-apps/api/core';
 import { 
   DubSegment, 
   ProjectConfig, 
@@ -216,6 +217,8 @@ interface StudioState {
   setIsPlaying: (playing: boolean) => void;
   setZoomPxPerSec: (zoom: number) => void;
   setAudioTrackMode: (mode: 'original' | 'dubbed' | 'split') => void;
+  isVaultProtected: boolean;
+  initSecureVault: () => Promise<void>;
   setApiKeys: (keys: Partial<ApiKeysConfig>) => void;
   setPipelineProgress: (progress: { running: boolean; stage?: string; percent?: number; detail?: string }) => void;
   setSettingsOpen: (open: boolean) => void;
@@ -617,15 +620,43 @@ export const useStudioStore = create<StudioState>((set) => ({
   setZoomPxPerSec: (zoomPxPerSec) => set({ zoomPxPerSec: Math.max(20, Math.min(250, zoomPxPerSec)) }),
   setAudioTrackMode: (audioTrackMode) => set({ audioTrackMode }),
 
+  isVaultProtected: false,
+
+  initSecureVault: async () => {
+    try {
+      const vaultKeys = await invoke<ApiKeysConfig>('load_secure_keys');
+      if (vaultKeys && (vaultKeys.geminiApiKey || vaultKeys.openaiApiKey || vaultKeys.groqApiKey || vaultKeys.elevenlabsApiKey)) {
+        set({ apiKeys: vaultKeys, isVaultProtected: true });
+        localStorage.removeItem(LOCAL_STORAGE_KEY_KEYS);
+        localStorage.removeItem('dubber_studio_cuda_keys');
+        return;
+      }
+      const legacyRaw = localStorage.getItem(LOCAL_STORAGE_KEY_KEYS);
+      if (legacyRaw) {
+        const legacyKeys = JSON.parse(legacyRaw) as ApiKeysConfig;
+        if (legacyKeys && (legacyKeys.geminiApiKey || legacyKeys.openaiApiKey || legacyKeys.groqApiKey || legacyKeys.elevenlabsApiKey)) {
+          await invoke('save_secure_keys', { keys: legacyKeys });
+          set({ apiKeys: legacyKeys, isVaultProtected: true });
+          localStorage.removeItem(LOCAL_STORAGE_KEY_KEYS);
+          localStorage.removeItem('dubber_studio_cuda_keys');
+          return;
+        }
+      }
+      set({ isVaultProtected: true });
+    } catch (e) {
+      console.warn('Windows Vault unavailable, running in local memory mode:', e);
+    }
+  },
+
   setApiKeys: (newKeys) =>
     set((state) => {
       const merged = { ...state.apiKeys, ...newKeys };
-      try {
-        localStorage.setItem(LOCAL_STORAGE_KEY_KEYS, JSON.stringify(merged));
-      } catch (e) {
-        console.error(e);
-      }
-      return { apiKeys: merged };
+      invoke('save_secure_keys', { keys: merged }).catch((e) => {
+        console.error('Failed to save to Windows Credential Vault:', e);
+      });
+      localStorage.removeItem(LOCAL_STORAGE_KEY_KEYS);
+      localStorage.removeItem('dubber_studio_cuda_keys');
+      return { apiKeys: merged, isVaultProtected: true };
     }),
 
   setPipelineProgress: ({ running, stage, percent, detail }) =>

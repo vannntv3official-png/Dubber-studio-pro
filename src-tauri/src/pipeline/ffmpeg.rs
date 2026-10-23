@@ -2,27 +2,31 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use crate::models::{DubSegment, OrigAudioRange};
 
+fn apply_process_flags(mut cmd: Command) -> Command {
+    cmd.env("PYTHONIOENCODING", "utf-8").env("PYTHONUTF8", "1");
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW prevents console popup flashes
+    }
+    cmd
+}
+
 pub fn create_command(name: &str) -> Command {
     // 1. Try sidecar path relative to current executable
     if let Ok(exe_path) = std::env::current_exe() {
         if let Some(exe_dir) = exe_path.parent() {
             let candidate_sidecar = exe_dir.join(format!("{}-x86_64-pc-windows-gnu.exe", name));
             if candidate_sidecar.exists() {
-                let mut cmd = Command::new(candidate_sidecar);
-                cmd.env("PYTHONIOENCODING", "utf-8").env("PYTHONUTF8", "1");
-                return cmd;
+                return apply_process_flags(Command::new(candidate_sidecar));
             }
             let candidate_plain = exe_dir.join(format!("{}.exe", name));
             if candidate_plain.exists() {
-                let mut cmd = Command::new(candidate_plain);
-                cmd.env("PYTHONIOENCODING", "utf-8").env("PYTHONUTF8", "1");
-                return cmd;
+                return apply_process_flags(Command::new(candidate_plain));
             }
             let candidate_binaries = exe_dir.join("binaries").join(format!("{}.exe", name));
             if candidate_binaries.exists() {
-                let mut cmd = Command::new(candidate_binaries);
-                cmd.env("PYTHONIOENCODING", "utf-8").env("PYTHONUTF8", "1");
-                return cmd;
+                return apply_process_flags(Command::new(candidate_binaries));
             }
         }
     }
@@ -30,15 +34,11 @@ pub fn create_command(name: &str) -> Command {
     // 2. Try project directory src-tauri/binaries/
     let local_sidecar = Path::new("binaries").join(format!("{}-x86_64-pc-windows-gnu.exe", name));
     if local_sidecar.exists() {
-        let mut cmd = Command::new(local_sidecar);
-        cmd.env("PYTHONIOENCODING", "utf-8").env("PYTHONUTF8", "1");
-        return cmd;
+        return apply_process_flags(Command::new(local_sidecar));
     }
     let local_plain = Path::new("binaries").join(format!("{}.exe", name));
     if local_plain.exists() {
-        let mut cmd = Command::new(local_plain);
-        cmd.env("PYTHONIOENCODING", "utf-8").env("PYTHONUTF8", "1");
-        return cmd;
+        return apply_process_flags(Command::new(local_plain));
     }
 
     // 3. Try standard Python scripts directory on Windows dynamically
@@ -50,18 +50,14 @@ pub fn create_command(name: &str) -> Command {
                 for entry in entries.flatten() {
                     let script_candidate = entry.path().join("Scripts").join(format!("{}.exe", name));
                     if script_candidate.exists() {
-                        let mut cmd = Command::new(script_candidate);
-                        cmd.env("PYTHONIOENCODING", "utf-8").env("PYTHONUTF8", "1");
-                        return cmd;
+                        return apply_process_flags(Command::new(script_candidate));
                     }
                 }
             }
         }
     }
 
-    let mut cmd = Command::new(name);
-    cmd.env("PYTHONIOENCODING", "utf-8").env("PYTHONUTF8", "1");
-    cmd
+    apply_process_flags(Command::new(name))
 }
 
 pub fn extract_audio(video_path: &str, out_wav_stt: &str, out_wav_mix: &str) -> Result<(), String> {
@@ -501,4 +497,52 @@ pub fn extract_video_frame_at_time(video_path: &str, timestamp_ms: u64, out_imag
         return Err("Failed to capture video snapshot frame via FFmpeg".to_string());
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_format_srt_timestamp() {
+        assert_eq!(format_srt_timestamp(0), "00:00:00,000");
+        assert_eq!(format_srt_timestamp(999), "00:00:00,999");
+        assert_eq!(format_srt_timestamp(1_000), "00:00:01,000");
+        assert_eq!(format_srt_timestamp(61_234), "00:01:01,234");
+        assert_eq!(format_srt_timestamp(3_661_500), "01:01:01,500");
+        assert_eq!(format_srt_timestamp(36_000_000), "10:00:00,000");
+    }
+
+    #[test]
+    fn test_export_srt_buffer() {
+        let segs = vec![
+            DubSegment {
+                id: "s1".to_string(),
+                index: 0,
+                start_ms: 1000,
+                end_ms: 3000,
+                speaker: "S1".to_string(),
+                speaker_tag: None,
+                voice_id: "voice1".to_string(),
+                original_text: "Original line".to_string(),
+                translated_text: "Translated line".to_string(),
+                tts_raw_path: None,
+                tts_stretched_path: None,
+                tts_duration_ms: None,
+                speed_ratio: 1.0,
+                status: crate::models::SegmentStatus::Ready,
+                error_message: None,
+            }
+        ];
+
+        let temp_dir = std::env::temp_dir().join(format!("dubber_test_{}", uuid::Uuid::new_v4()));
+        let _ = std::fs::create_dir_all(&temp_dir);
+        let srt_file = temp_dir.join("test.srt");
+        let res = export_srt_file(&segs, srt_file.to_str().unwrap());
+        assert!(res.is_ok());
+
+        let content = std::fs::read_to_string(&srt_file).unwrap();
+        assert!(content.contains("1\n00:00:01,000 --> 00:00:03,000\nTranslated line\n"));
+        let _ = std::fs::remove_dir_all(&temp_dir);
+    }
 }

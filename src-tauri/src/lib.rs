@@ -1,6 +1,7 @@
 pub mod models;
 pub mod pipeline;
 pub mod commands;
+pub mod security;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -20,7 +21,11 @@ pub fn run() {
             commands::get_system_metrics,
             commands::extract_video_frame,
             commands::detect_frame_subtitles,
-            commands::open_path_in_explorer
+            commands::open_path_in_explorer,
+            commands::save_secure_keys,
+            commands::load_secure_keys,
+            commands::has_secure_keys,
+            commands::delete_secure_keys
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

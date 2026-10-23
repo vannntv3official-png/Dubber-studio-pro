@@ -49,6 +49,7 @@ export const PreferencesModal: React.FC = () => {
     setSettingsOpen, 
     apiKeys, 
     setApiKeys,
+    isVaultProtected,
     project,
     updateProjectConfig,
     theme,
@@ -183,7 +184,10 @@ export const PreferencesModal: React.FC = () => {
   });
 
   React.useEffect(() => {
-    localStorage.setItem('dubber_studio_cuda_keys', JSON.stringify(cudaKeys));
+    // Only persist metadata without leaking raw secrets to localStorage
+    const sanitized = cudaKeys.map(({ key: _k, ...meta }) => meta);
+    localStorage.setItem('dubber_studio_cuda_keys_meta', JSON.stringify(sanitized));
+    localStorage.removeItem('dubber_studio_cuda_keys');
     const topKey = cudaKeys.find((k) => k.priority === 1);
     if (topKey && topKey.key && topKey.key !== apiKeys.geminiApiKey) {
       setApiKeys({ geminiApiKey: topKey.key });
@@ -1236,9 +1240,15 @@ export const PreferencesModal: React.FC = () => {
                 {activeTab === 'API Keys' && (
                   <div className="space-y-5">
                     {/* Section Header */}
-                    <div className="flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-zinc-100">
-                      <Languages className="w-4 h-4 text-purple-600 dark:text-purple-400" />
-                      <span>Translate subtitles with</span>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-zinc-100">
+                        <Languages className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                        <span>Translate subtitles with</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                        <ShieldCheck className="w-3.5 h-3.5" />
+                        <span>{isVaultProtected ? 'Windows Credential Vault (DPAPI)' : 'Secure Memory Store'}</span>
+                      </div>
                     </div>
 
                     <div className="grid grid-cols-2 gap-3 rounded-xl border border-slate-200 dark:border-zinc-800 p-3">

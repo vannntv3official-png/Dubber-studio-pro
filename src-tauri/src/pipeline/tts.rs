@@ -110,6 +110,11 @@ async fn synthesize_edge_tts(text: &str, voice: &str, output_path: &str) -> Resu
     if !edge_ok {
         let mut py_cmd = std::process::Command::new("python");
         py_cmd.env("PYTHONIOENCODING", "utf-8").env("PYTHONUTF8", "1");
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            py_cmd.creation_flags(0x08000000);
+        }
         py_cmd.args([
             "-m", "edge_tts",
             "--voice", selected_voice,

@@ -547,14 +547,40 @@ pub fn open_path_in_explorer(path: String) -> Result<(), String> {
         if !p.exists() {
             let _ = std::fs::create_dir_all(p);
         }
-        let target = if p.is_file() {
-            format!("/select,\"{}\"", resolved)
+        let mut cmd = std::process::Command::new("explorer");
+        if p.is_file() {
+            cmd.arg(format!("/select,{}", resolved));
         } else {
-            resolved
-        };
-        let _ = std::process::Command::new("explorer").arg(target).spawn();
+            cmd.arg(&resolved);
+        }
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            cmd.creation_flags(0x08000000);
+        }
+        let _ = cmd.spawn();
         return Ok(());
     }
     #[allow(unreachable_code)]
     Ok(())
+}
+
+#[tauri::command]
+pub fn save_secure_keys(keys: ApiKeysConfig) -> Result<(), String> {
+    crate::security::save_secure_keys(&keys)
+}
+
+#[tauri::command]
+pub fn load_secure_keys() -> Result<ApiKeysConfig, String> {
+    crate::security::load_secure_keys()
+}
+
+#[tauri::command]
+pub fn has_secure_keys() -> Result<bool, String> {
+    crate::security::has_secure_keys()
+}
+
+#[tauri::command]
+pub fn delete_secure_keys() -> Result<(), String> {
+    crate::security::delete_secure_keys()
 }

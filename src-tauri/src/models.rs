@@ -153,3 +153,83 @@ pub struct SystemMetrics {
     pub memory_usage_percent: u8,
     pub os_name: String,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_project_config_defaults() {
+        let json = r#"{
+            "id": "proj-123",
+            "videoPath": "C:\\videos\\sample.mp4",
+            "sourceLang": "en",
+            "targetLang": "km-KH",
+            "ttsProvider": "edge-tts",
+            "defaultVoice": "km-KH-PisethNeural",
+            "llmProvider": "gemini",
+            "duckingVolume": 0.18
+        }"#;
+
+        let config: ProjectConfig = serde_json::from_str(json).expect("Deserialization failed");
+        assert_eq!(config.id, "proj-123");
+        assert_eq!(config.original_audio_gain, 1.0);
+        assert_eq!(config.bgm_audio_gain, 0.75);
+        assert!(!config.original_audio_muted);
+        assert!(config.peak_limiter_enabled);
+    }
+
+    #[test]
+    fn test_segment_status_transitions() {
+        assert_eq!(SegmentStatus::default(), SegmentStatus::Pending);
+
+        let seg = DubSegment {
+            id: "seg-1".to_string(),
+            index: 0,
+            start_ms: 1000,
+            end_ms: 3500,
+            speaker: "Speaker 1".to_string(),
+            speaker_tag: None,
+            voice_id: "km-KH-PisethNeural".to_string(),
+            original_text: "Hello world".to_string(),
+            translated_text: "សួស្តីពិភពលោក".to_string(),
+            tts_raw_path: None,
+            tts_stretched_path: None,
+            tts_duration_ms: None,
+            speed_ratio: 1.05,
+            status: SegmentStatus::Ready,
+            error_message: None,
+        };
+
+        let serialized = serde_json::to_string(&seg).expect("Serialization failed");
+        assert!(serialized.contains("សួស្តីពិភពលោក"));
+        assert!(serialized.contains("speedRatio"));
+
+        let deserialized: DubSegment = serde_json::from_str(&serialized).expect("Deserialization failed");
+        assert_eq!(deserialized.id, "seg-1");
+        assert_eq!(deserialized.end_ms - deserialized.start_ms, 2500);
+        assert_eq!(deserialized.status, SegmentStatus::Ready);
+    }
+
+    #[test]
+    fn test_orig_audio_range_serialization() {
+        let range = OrigAudioRange {
+            id: "r-1".to_string(),
+            start_ms: 500,
+            end_ms: 4500,
+            action: "mute".to_string(),
+            fade_in_ms: 200,
+            fade_out_ms: 300,
+            gain: 0.0,
+            label: Some("Intro Music Mute".to_string()),
+        };
+
+        let json = serde_json::to_string(&range).unwrap();
+        assert!(json.contains("\"action\":\"mute\""));
+        assert!(json.contains("\"fadeInMs\":200"));
+
+        let parsed: OrigAudioRange = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.start_ms, 500);
+        assert_eq!(parsed.action, "mute");
+    }
+}
