@@ -1,0 +1,31 @@
+[package]
+name = "dubber-studio-pro"
+version = "1.0.0"
+description = "AI Video Dubbing and Translation Desktop Studio"
+authors = ["Dubber Studio Team"]
+edition = "2021"
+
+[lib]
+name = "dubber_studio_pro_lib"
+crate-type = ["rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.0.5", features = [] }
+
+[dependencies]
+tauri = { version = "2.2.4", features = ["protocol-asset"] }
+tauri-plugin-shell = "2.2.0"
+tauri-plugin-dialog = "2.2.0"
+tauri-plugin-fs = "2.2.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio = { version = "1.43", features = ["full"] }
+reqwest = { version = "0.12", features = ["json", "multipart", "stream"] }
+hound = "3.5"
+tempfile = "3.17"
+uuid = { version = "1.13", features = ["v4", "fast-rng"] }
+regex = "1.11"
+futures-util = "0.3"
+log = "0.4"
+env_logger = "0.11"
+base64 = "0.22"
