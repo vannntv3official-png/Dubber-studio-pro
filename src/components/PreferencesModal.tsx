@@ -35,7 +35,7 @@ import {
 import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
 import { useStudioStore } from '../store/studioStore';
-import { POPULAR_VOICES } from '../types/studio';
+import { MOVIE_PERSONAS, MOVIE_EMOTIONS, MoviePersona } from '../types/studio';
 
 interface PronunciationEntry {
   id: string;
@@ -277,6 +277,32 @@ export const PreferencesModal: React.FC = () => {
       setActiveTab(preferencesActiveTab);
     }
   }, [preferencesActiveTab]);
+
+  const [auditioningPersonaId, setAuditioningPersonaId] = useState<string | null>(null);
+
+  const handleAuditionPersona = (persona: MoviePersona) => {
+    if (auditioningPersonaId === persona.id) {
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+      }
+      setAuditioningPersonaId(null);
+      return;
+    }
+
+    setAuditioningPersonaId(persona.id);
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance('សួស្តី! នេះគឺជាសម្លេងតួអង្គក្នុងខ្សែភាពយន្ត។');
+      utterance.rate = persona.rateMultiplier;
+      const pitchScale = 1.0 + (persona.pitchOffsetHz / 60);
+      utterance.pitch = Math.max(0.5, Math.min(1.8, pitchScale));
+      utterance.onend = () => setAuditioningPersonaId(null);
+      utterance.onerror = () => setAuditioningPersonaId(null);
+      window.speechSynthesis.speak(utterance);
+    } else {
+      setTimeout(() => setAuditioningPersonaId(null), 1500);
+    }
+  };
 
   const navItems = [
     { id: 'General', label: 'General', icon: SlidersVertical },
@@ -2037,37 +2063,122 @@ export const PreferencesModal: React.FC = () => {
                 {activeTab === 'VoxCMP2 AI' && (
                   <div className="space-y-4 text-xs">
                     <div>
-                      <h4 className="font-bold text-sm text-slate-900 dark:text-zinc-100">
-                        VoxCMP2 AI Local & Edge Voice Engine
+                      <h4 className="font-bold text-sm text-slate-900 dark:text-zinc-100 flex items-center gap-2">
+                        <span>Movie Voice Engine &amp; Audio Polish</span>
+                        <span className="px-2 py-0.5 rounded-full text-[10px] bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300 font-semibold">
+                          Translator Studio Pipeline
+                        </span>
                       </h4>
                       <p className="text-[11px] text-slate-500 dark:text-zinc-400">
-                        Control native Khmer neural voice inference and local pitch parameters.
+                        11 Movie Character Archetypes, 8 Emotion Modulations, and Studio Audio Polish filters (70Hz Highpass + 12000Hz Lowpass + 20ms/35ms micro-fades).
                       </p>
                     </div>
 
-                    <div className="p-4 rounded-xl border border-slate-200 dark:border-zinc-800 bg-slate-50/50 dark:bg-zinc-950/40 space-y-3">
+                    {/* Studio Polish Engine Banner */}
+                    <div className="p-3 rounded-xl border border-emerald-200 dark:border-emerald-800/60 bg-emerald-50/50 dark:bg-emerald-950/20 space-y-2">
                       <div className="flex items-center justify-between">
-                        <span className="font-semibold text-slate-700 dark:text-zinc-300">Inference Accelerator:</span>
-                        <span className="font-mono text-emerald-600 dark:text-emerald-400 font-bold">DirectML (GPU)</span>
+                        <span className="font-bold text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
+                          <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                          Studio Audio Polish Chain (Active)
+                        </span>
+                        <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 font-bold">
+                          ONLINE
+                        </span>
                       </div>
-
-                      <div className="space-y-1">
-                        <label className="font-semibold text-slate-700 dark:text-zinc-300">Default Khmer Voice Model:</label>
-                        <select className="w-full px-3 py-1.5 rounded-lg border border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-xs">
-                          {POPULAR_VOICES.filter((v) => v.locale.startsWith('km')).map((v) => (
-                            <option key={v.id} value={v.id}>{v.name} ({v.gender})</option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <div className="space-y-1">
-                        <label className="font-semibold text-slate-700 dark:text-zinc-300">Pitch & Formant Shift:</label>
-                        <input type="range" min="-5" max="5" defaultValue="0" className="w-full h-1.5 bg-slate-200 dark:bg-zinc-800 rounded cursor-pointer" />
-                        <div className="flex justify-between text-[10px] text-slate-400">
-                          <span>Deeper (-5)</span>
-                          <span>Neutral (0)</span>
-                          <span>Higher (+5)</span>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px]">
+                        <div className="bg-white/80 dark:bg-zinc-900/80 p-2 rounded-lg border border-emerald-100 dark:border-emerald-900/40">
+                          <span className="text-slate-400 block text-[10px]">Highpass Filter</span>
+                          <span className="font-bold text-slate-700 dark:text-zinc-200">70 Hz (Anti-rumble)</span>
                         </div>
+                        <div className="bg-white/80 dark:bg-zinc-900/80 p-2 rounded-lg border border-emerald-100 dark:border-emerald-900/40">
+                          <span className="text-slate-400 block text-[10px]">Lowpass Filter</span>
+                          <span className="font-bold text-slate-700 dark:text-zinc-200">12,000 Hz (Air/Soft)</span>
+                        </div>
+                        <div className="bg-white/80 dark:bg-zinc-900/80 p-2 rounded-lg border border-emerald-100 dark:border-emerald-900/40">
+                          <span className="text-slate-400 block text-[10px]">Micro-fades</span>
+                          <span className="font-bold text-slate-700 dark:text-zinc-200">20ms in / 35ms out</span>
+                        </div>
+                        <div className="bg-white/80 dark:bg-zinc-900/80 p-2 rounded-lg border border-emerald-100 dark:border-emerald-900/40">
+                          <span className="text-slate-400 block text-[10px]">Khmer Text Pacing</span>
+                          <span className="font-bold text-slate-700 dark:text-zinc-200">Auto [។៕?!] Spacing</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Movie Character Personas Grid */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <h5 className="font-bold text-slate-800 dark:text-zinc-200">
+                          Movie Character Personas (11 Archetypes)
+                        </h5>
+                        <span className="text-[10px] text-slate-400">Click Audition to preview</span>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-72 overflow-y-auto pr-1 custom-scrollbar">
+                        {MOVIE_PERSONAS.map((persona) => {
+                          const isAuditioning = auditioningPersonaId === persona.id;
+                          return (
+                            <div
+                              key={persona.id}
+                              className="p-2.5 rounded-xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/70 flex items-center justify-between gap-2 shadow-2xs hover:border-indigo-300 dark:hover:border-indigo-700 transition-colors"
+                            >
+                              <div className="flex items-center gap-2 min-w-0">
+                                <span className="text-xl shrink-0">{persona.emoji}</span>
+                                <div className="min-w-0">
+                                  <div className="font-bold text-xs text-slate-800 dark:text-zinc-100 truncate">
+                                    {persona.khmerName}
+                                  </div>
+                                  <div className="text-[10px] text-slate-400 dark:text-zinc-500 truncate flex items-center gap-1.5">
+                                    <span>{persona.name}</span>
+                                    <span>•</span>
+                                    <span className="font-mono text-indigo-600 dark:text-indigo-400">
+                                      {persona.pitchOffsetHz >= 0 ? `+${persona.pitchOffsetHz}Hz` : `${persona.pitchOffsetHz}Hz`}
+                                    </span>
+                                    <span>•</span>
+                                    <span className="font-mono text-purple-600 dark:text-purple-400">
+                                      {persona.rateMultiplier}x
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <button
+                                onClick={() => handleAuditionPersona(persona)}
+                                className={`shrink-0 px-2 py-1 rounded-lg text-[10px] font-bold flex items-center gap-1 transition-colors ${
+                                  isAuditioning
+                                    ? 'bg-emerald-600 text-white'
+                                    : 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/60'
+                                }`}
+                              >
+                                <Volume2 className={`w-3 h-3 ${isAuditioning ? 'animate-bounce' : ''}`} />
+                                <span>{isAuditioning ? 'Playing' : 'Audition'}</span>
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Movie Emotion Presets */}
+                    <div className="space-y-2 pt-2 border-t border-slate-200 dark:border-zinc-800">
+                      <h5 className="font-bold text-slate-800 dark:text-zinc-200">
+                        Movie Emotion Modulation (8 Presets)
+                      </h5>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                        {MOVIE_EMOTIONS.map((em) => (
+                          <div
+                            key={em.id}
+                            className="p-2 rounded-lg border border-slate-200 dark:border-zinc-800 bg-slate-50/50 dark:bg-zinc-950/40 text-center"
+                          >
+                            <span className="text-lg block mb-0.5">{em.emoji}</span>
+                            <span className="font-bold text-xs text-slate-800 dark:text-zinc-200 block truncate">
+                              {em.khmerName}
+                            </span>
+                            <span className="text-[10px] text-slate-400 dark:text-zinc-500 font-mono block">
+                              Pitch: {em.pitchDeltaHz >= 0 ? `+${em.pitchDeltaHz}Hz` : `${em.pitchDeltaHz}Hz`} | Spd: {em.rateDeltaPercent >= 0 ? `+${em.rateDeltaPercent}%` : `${em.rateDeltaPercent}%`}
+                            </span>
+                          </div>
+                        ))}
                       </div>
                     </div>
                   </div>

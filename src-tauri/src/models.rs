@@ -96,6 +96,10 @@ pub struct DubSegment {
     pub status: SegmentStatus,
     #[serde(default)]
     pub error_message: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub persona: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub emotion: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -199,6 +203,8 @@ mod tests {
             speed_ratio: 1.05,
             status: SegmentStatus::Ready,
             error_message: None,
+            persona: Some("father".to_string()),
+            emotion: Some("calm".to_string()),
         };
 
         let serialized = serde_json::to_string(&seg).expect("Serialization failed");

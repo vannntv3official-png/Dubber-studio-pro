@@ -410,6 +410,8 @@ fn parse_whisper_json_to_segments(
             speed_ratio: 1.0,
             status: SegmentStatus::Transcribed,
             error_message: None,
+            persona: None,
+            emotion: None,
         });
     }
 
@@ -432,6 +434,8 @@ fn parse_whisper_json_to_segments(
             speed_ratio: 1.0,
             status: SegmentStatus::Transcribed,
             error_message: None,
+            persona: None,
+            emotion: None,
         });
     }
 

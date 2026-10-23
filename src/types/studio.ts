@@ -29,6 +29,8 @@ export interface DubSegment {
   speaker: string;
   speakerTag?: string;
   voiceId: string;
+  persona?: string;
+  emotion?: string;
   originalText: string;
   translatedText: string;
   ttsRawPath?: string | null;
@@ -63,6 +65,51 @@ export interface VoiceOption {
   locale: string;
   provider: TtsProvider;
 }
+
+export interface MoviePersona {
+  id: string;
+  name: string;
+  khmerName: string;
+  emoji: string;
+  defaultVoice: string;
+  pitchOffsetHz: number;
+  rateMultiplier: number;
+  description: string;
+}
+
+export interface MovieEmotion {
+  id: string;
+  name: string;
+  khmerName: string;
+  emoji: string;
+  rateDeltaPercent: number;
+  pitchDeltaHz: number;
+}
+
+export const MOVIE_PERSONAS: MoviePersona[] = [
+  { id: 'narrator', name: 'Movie Narrator', khmerName: 'អ្នកអត្ថាធិប្បាយភាពយន្ត', emoji: '🎙️', defaultVoice: 'km-KH-PisethNeural', pitchOffsetHz: -5, rateMultiplier: 0.98, description: 'Narrator / Voice-over' },
+  { id: 'young_man', name: 'Young Man / Hero', khmerName: 'យុវជន / តួឯកប្រុស', emoji: '👱‍♂️', defaultVoice: 'km-KH-PisethNeural', pitchOffsetHz: -2, rateMultiplier: 1.00, description: 'Young male lead' },
+  { id: 'young_woman', name: 'Young Woman / Heroine', khmerName: 'នារីវ័យក្មេង / តួឯកស្រី', emoji: '👱‍♀️', defaultVoice: 'km-KH-SreymomNeural', pitchOffsetHz: 2, rateMultiplier: 1.00, description: 'Young female lead' },
+  { id: 'father', name: 'Father / Adult Male', khmerName: 'លោកឪពុក / បុរសពេញវ័យ', emoji: '👨', defaultVoice: 'km-KH-PisethNeural', pitchOffsetHz: -12, rateMultiplier: 0.98, description: 'Father / Adult male' },
+  { id: 'mother', name: 'Mother / Adult Female', khmerName: 'អ្នកម្តាយ / ស្ត្រីពេញវ័យ', emoji: '👩', defaultVoice: 'km-KH-SreymomNeural', pitchOffsetHz: -4, rateMultiplier: 0.98, description: 'Mother / Adult female' },
+  { id: 'grandfather', name: 'Grandfather / Old Male', khmerName: 'លោកតា / ជីតា', emoji: '👴', defaultVoice: 'km-KH-PisethNeural', pitchOffsetHz: -22, rateMultiplier: 0.90, description: 'Elderly grandfather' },
+  { id: 'grandmother', name: 'Grandmother / Old Female', khmerName: 'លោកយាយ / ជីដូន', emoji: '👵', defaultVoice: 'km-KH-SreymomNeural', pitchOffsetHz: -8, rateMultiplier: 0.93, description: 'Elderly grandmother' },
+  { id: 'boy', name: 'Boy / Son', khmerName: 'ក្មេងប្រុស / កូនប្រុស', emoji: '👦', defaultVoice: 'km-KH-PisethNeural', pitchOffsetHz: 15, rateMultiplier: 1.03, description: 'Young boy' },
+  { id: 'girl', name: 'Girl / Daughter', khmerName: 'ក្មេងស្រី / កូនស្រី', emoji: '👧', defaultVoice: 'km-KH-SreymomNeural', pitchOffsetHz: 20, rateMultiplier: 1.02, description: 'Young girl' },
+  { id: 'baby', name: 'Baby / Toddler', khmerName: 'ទារក / កូនង៉ា', emoji: '👶', defaultVoice: 'km-KH-SreymomNeural', pitchOffsetHz: 30, rateMultiplier: 1.05, description: 'Infant or small child' },
+  { id: 'villain', name: 'Villain / Antagonist', khmerName: 'តួកាច / ជនទុច្ចរិត', emoji: '🦹', defaultVoice: 'km-KH-PisethNeural', pitchOffsetHz: -18, rateMultiplier: 0.95, description: 'Dark / deep villain' }
+];
+
+export const MOVIE_EMOTIONS: MovieEmotion[] = [
+  { id: 'natural', name: 'Natural', khmerName: 'ធម្មតា', emoji: '😐', rateDeltaPercent: 0, pitchDeltaHz: 0 },
+  { id: 'calm', name: 'Calm', khmerName: 'ស្ងប់ស្ងាត់', emoji: '😌', rateDeltaPercent: -7, pitchDeltaHz: -4 },
+  { id: 'sad', name: 'Sad', khmerName: 'កំសត់ / ស្រពោន', emoji: '😢', rateDeltaPercent: -9, pitchDeltaHz: -10 },
+  { id: 'angry', name: 'Angry', khmerName: 'ខឹង / ឆេវឆាវ', emoji: '😡', rateDeltaPercent: 4, pitchDeltaHz: 6 },
+  { id: 'happy', name: 'Happy', khmerName: 'រីករាយ / សប្បាយ', emoji: '😄', rateDeltaPercent: 2, pitchDeltaHz: 8 },
+  { id: 'excited', name: 'Excited', khmerName: 'រំភើប / ភ្ញាក់ផ្អើល', emoji: '🤩', rateDeltaPercent: 5, pitchDeltaHz: 12 },
+  { id: 'scared', name: 'Scared / Fearful', khmerName: 'ភ័យខ្លាច', emoji: '😨', rateDeltaPercent: 3, pitchDeltaHz: 6 },
+  { id: 'whisper', name: 'Whisper', khmerName: 'ខ្សឹប', emoji: '🤫', rateDeltaPercent: -11, pitchDeltaHz: -6 }
+];
 
 export const POPULAR_VOICES: VoiceOption[] = [
   { id: 'km-KH-PisethNeural', name: 'Piseth (Khmer)', gender: 'Male', language: 'Khmer', locale: 'km-KH', provider: 'edge-tts' },

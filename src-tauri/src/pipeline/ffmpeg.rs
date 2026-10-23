@@ -532,6 +532,8 @@ mod tests {
                 speed_ratio: 1.0,
                 status: crate::models::SegmentStatus::Ready,
                 error_message: None,
+                persona: None,
+                emotion: None,
             }
         ];
 

@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import { invoke, convertFileSrc } from '@tauri-apps/api/core';
 import { useStudioStore } from '../store/studioStore';
-import { DubSegment } from '../types/studio';
+import { DubSegment, MOVIE_PERSONAS, MOVIE_EMOTIONS } from '../types/studio';
 import { PipelineProgress } from './PipelineProgress';
 
 export const SubtitleDataTable: React.FC = () => {
@@ -45,6 +45,8 @@ export const SubtitleDataTable: React.FC = () => {
 
   const [selectedMaleVoice, setSelectedMaleVoice] = useState('km-KH-PisethNeural');
   const [selectedFemaleVoice, setSelectedFemaleVoice] = useState('km-KH-SreymomNeural');
+  const [batchPersona, setBatchPersona] = useState('narrator');
+  const [batchEmotion, setBatchEmotion] = useState('natural');
   const [playingSegmentId, setPlayingSegmentId] = useState<string | null>(null);
   const audioPlayerRef = useRef<HTMLAudioElement | null>(null);
 
@@ -119,6 +121,28 @@ export const SubtitleDataTable: React.FC = () => {
       });
     } else if (activeSegmentId) {
       updateSegmentPartial(activeSegmentId, { voiceId: selectedFemaleVoice, speakerTag: 'A4' });
+    }
+  };
+
+  const handleApplyBatchPersona = () => {
+    const p = MOVIE_PERSONAS.find((x) => x.id === batchPersona);
+    const vId = p ? p.defaultVoice : selectedMaleVoice;
+    if (selectedSegmentIds.length > 0) {
+      selectedSegmentIds.forEach((id) => {
+        updateSegmentPartial(id, { persona: batchPersona, voiceId: vId });
+      });
+    } else if (activeSegmentId) {
+      updateSegmentPartial(activeSegmentId, { persona: batchPersona, voiceId: vId });
+    }
+  };
+
+  const handleApplyBatchEmotion = () => {
+    if (selectedSegmentIds.length > 0) {
+      selectedSegmentIds.forEach((id) => {
+        updateSegmentPartial(id, { emotion: batchEmotion });
+      });
+    } else if (activeSegmentId) {
+      updateSegmentPartial(activeSegmentId, { emotion: batchEmotion });
     }
   };
 
@@ -206,12 +230,6 @@ export const SubtitleDataTable: React.FC = () => {
     const s = totalSec % 60;
     const centis = Math.floor((ms % 1000) / 10);
     return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}.${centis.toString().padStart(2, '0')}`;
-  };
-
-  const isFemaleVoice = (tag?: string, voiceId?: string) => {
-    if (tag === 'A5' || tag === 'A4') return true;
-    if (voiceId && (voiceId.includes('Sreymom') || voiceId.includes('Ava') || voiceId.includes('Emma') || voiceId.includes('Rachel'))) return true;
-    return false;
   };
 
   return (
@@ -462,11 +480,55 @@ export const SubtitleDataTable: React.FC = () => {
           </div>
         </div>
 
-        {/* Right: Quick Voice Assignment Controls */}
-        <div className="flex items-center gap-2 shrink-0">
-          <span className="text-[11px] font-semibold text-slate-500 dark:text-zinc-400 hidden xl:inline">
-            Set voice to:
-          </span>
+        {/* Right: Quick Voice & Character Assignment Controls */}
+        <div className="flex items-center gap-1.5 shrink-0">
+          {/* Batch Persona Picker */}
+          <div className="flex items-center rounded-lg border border-purple-200 dark:border-purple-900 bg-purple-50/80 dark:bg-purple-950/40 p-0.5 shadow-2xs">
+            <span className="text-purple-600 text-xs ml-1 mr-0.5">🎭</span>
+            <select
+              value={batchPersona}
+              onChange={(e) => setBatchPersona(e.target.value)}
+              className="bg-transparent text-[11px] font-semibold text-purple-700 dark:text-purple-300 px-1 py-0.5 focus:outline-none cursor-pointer font-sans"
+              title="Select Movie Character Persona for selection"
+            >
+              {MOVIE_PERSONAS.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.emoji} {p.khmerName}
+                </option>
+              ))}
+            </select>
+            <button
+              onClick={handleApplyBatchPersona}
+              className="w-5 h-5 rounded-md bg-purple-600 hover:bg-purple-700 text-white flex items-center justify-center transition-colors shadow-xs"
+              title="Apply Movie Persona to selected subtitles"
+            >
+              <Check className="w-3 h-3" />
+            </button>
+          </div>
+
+          {/* Batch Emotion Picker */}
+          <div className="flex items-center rounded-lg border border-amber-200 dark:border-amber-900 bg-amber-50/80 dark:bg-amber-950/40 p-0.5 shadow-2xs">
+            <span className="text-amber-600 text-xs ml-1 mr-0.5">✨</span>
+            <select
+              value={batchEmotion}
+              onChange={(e) => setBatchEmotion(e.target.value)}
+              className="bg-transparent text-[11px] font-semibold text-amber-700 dark:text-amber-300 px-1 py-0.5 focus:outline-none cursor-pointer font-sans"
+              title="Select Movie Emotion for selection"
+            >
+              {MOVIE_EMOTIONS.map((em) => (
+                <option key={em.id} value={em.id}>
+                  {em.emoji} {em.khmerName}
+                </option>
+              ))}
+            </select>
+            <button
+              onClick={handleApplyBatchEmotion}
+              className="w-5 h-5 rounded-md bg-amber-600 hover:bg-amber-700 text-white flex items-center justify-center transition-colors shadow-xs"
+              title="Apply Emotion to selected subtitles"
+            >
+              <Check className="w-3 h-3" />
+            </button>
+          </div>
 
           {/* Male voice pill: [♂ Default Male v] [✓] — full Khmer name */}
           <div className="flex items-center rounded-lg border border-blue-200 dark:border-blue-900 bg-blue-50/80 dark:bg-blue-950/40 p-0.5 shadow-2xs">
@@ -530,9 +592,10 @@ export const SubtitleDataTable: React.FC = () => {
               <th className="w-20 px-2 py-2">START</th>
               <th className="w-20 px-2 py-2">END</th>
               <th className="px-3 py-2">KHMER TEXT (EDITABLE)</th>
-              <th className="w-52 px-3 py-2">VOICE PROFILE</th>
-              <th className="w-28 px-2 py-2 text-center">SPEED</th>
-              <th className="w-24 px-3 py-2 text-center">AUDIO STATUS</th>
+              <th className="w-52 px-2 py-2">CHARACTER PERSONA</th>
+              <th className="w-36 px-2 py-2">EMOTION</th>
+              <th className="w-20 px-2 py-2 text-center">SPEED</th>
+              <th className="w-24 px-3 py-2 text-center">AUDIO</th>
             </tr>
           </thead>
 
@@ -540,7 +603,7 @@ export const SubtitleDataTable: React.FC = () => {
           <tbody className="divide-y divide-slate-100 dark:divide-zinc-900 font-sans">
             {filteredSegments.length === 0 ? (
               <tr>
-                <td colSpan={7} className="p-6 sm:p-10">
+                <td colSpan={8} className="p-6 sm:p-10">
                   <div className="mx-auto flex max-w-md flex-col items-center text-center">
                     <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-400">
                       <MessageSquareText className="h-5 w-5" />
@@ -573,7 +636,6 @@ export const SubtitleDataTable: React.FC = () => {
               filteredSegments.map((seg) => {
                 const isSelected = selectedSegmentIds.includes(seg.id);
                 const isActive = activeSegmentId === seg.id;
-                const isFemale = isFemaleVoice(seg.speakerTag, seg.voiceId);
                 const speed = seg.speedRatio || 1.0;
                 const isPlayingThis = playingSegmentId === seg.id;
                 const isSynthesizing = seg.status === 'synthesizing';
@@ -629,23 +691,49 @@ export const SubtitleDataTable: React.FC = () => {
                       </div>
                     </td>
 
-                    {/* Voice Profile Column: Rounded-full Pill matching screenshot */}
-                    <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
-                      <button
-                        onClick={() => {
-                          const newVoice = isFemale ? 'km-KH-PisethNeural' : 'km-KH-SreymomNeural';
-                          const newTag = isFemale ? 'A2' : 'A4';
-                          updateSegmentPartial(seg.id, { voiceId: newVoice, speakerTag: newTag });
-                        }}
-                        className={`inline-flex items-center gap-1 px-3 py-0.5 rounded-full border text-xs font-semibold transition-all hover:scale-105 active:scale-95 shadow-2xs ${
-                          isFemale
-                            ? 'border-pink-200 dark:border-pink-900 bg-pink-50/80 dark:bg-pink-950/40 text-pink-600 dark:text-pink-400'
-                            : 'border-blue-200 dark:border-blue-900 bg-blue-50/80 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400'
-                        }`}
-                        title="Click to toggle Voice Profile (Piseth / Sreymom)"
-                      >
-                        <span>{isFemale ? '♀ ស្រីមុំ (Sreymom)' : '♂ ភិសិដ្ឋ (Piseth)'}</span>
-                      </button>
+                    {/* Character Persona & Voice Column */}
+                    <td className="px-2 py-2" onClick={(e) => e.stopPropagation()}>
+                      <div className="relative inline-block w-full">
+                        <select
+                          value={seg.persona || 'narrator'}
+                          onChange={(e) => {
+                            const newPersona = e.target.value;
+                            const pObj = MOVIE_PERSONAS.find((p) => p.id === newPersona);
+                            updateSegmentPartial(seg.id, {
+                              persona: newPersona,
+                              voiceId: pObj?.defaultVoice || seg.voiceId || 'km-KH-PisethNeural',
+                            });
+                          }}
+                          className="w-full text-[11px] font-semibold rounded-lg px-2 py-1 border border-indigo-200 dark:border-indigo-900 bg-white dark:bg-zinc-900 text-indigo-700 dark:text-indigo-300 focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer shadow-2xs font-sans truncate"
+                          title="Movie Character Archetype (tuned pitch offset & speech rate)"
+                        >
+                          {MOVIE_PERSONAS.map((p) => (
+                            <option key={p.id} value={p.id}>
+                              {p.emoji} {p.khmerName}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </td>
+
+                    {/* Emotion Modulation Column */}
+                    <td className="px-2 py-2" onClick={(e) => e.stopPropagation()}>
+                      <div className="relative inline-block w-full">
+                        <select
+                          value={seg.emotion || 'natural'}
+                          onChange={(e) => {
+                            updateSegmentPartial(seg.id, { emotion: e.target.value });
+                          }}
+                          className="w-full text-[11px] font-semibold rounded-lg px-2 py-1 border border-amber-200 dark:border-amber-900 bg-white dark:bg-zinc-900 text-amber-700 dark:text-amber-300 focus:outline-none focus:ring-1 focus:ring-amber-500 cursor-pointer shadow-2xs font-sans truncate"
+                          title="Dialogue Emotion Modulation (pitch & speech speed)"
+                        >
+                          {MOVIE_EMOTIONS.map((em) => (
+                            <option key={em.id} value={em.id}>
+                              {em.emoji} {em.khmerName}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
                     </td>
 
                     {/* Speed Column: Clean text 1.0x / 1.1x matching screenshot */}
