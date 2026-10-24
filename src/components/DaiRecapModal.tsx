@@ -9,6 +9,7 @@ export const DaiRecapModal: React.FC = () => {
     setDaiRecapOpen,
     segments,
     setPipelineProgress,
+    apiKeys,
   } = useStudioStore();
 
   const [summaryLength, setSummaryLength] = useState<'brief' | 'standard' | 'detailed'>('standard');
@@ -28,53 +29,114 @@ export const DaiRecapModal: React.FC = () => {
 
   if (!isDaiRecapOpen) return null;
 
-  const handleGenerateRecap = () => {
+  const handleGenerateRecap = async () => {
     setIsGenerating(true);
     setPipelineProgress({
       running: true,
-      stage: 'DAI Recap Generation',
-      percent: 40,
-      detail: 'Summarizing key dialogue scenes and character arcs...',
+      stage: 'Recap Generation',
+      percent: 30,
+      detail: 'Analyzing dialogue transcript...',
     });
 
-    setTimeout(() => {
+    const activeLines = segments
+      .map((s, idx) => {
+        const text = (s.translatedText || s.originalText || '').trim();
+        return text ? `[${idx + 1}] ${text}` : '';
+      })
+      .filter(Boolean);
+
+    if (activeLines.length === 0) {
       setIsGenerating(false);
-      setPipelineProgress({ running: false, stage: 'Recap Ready', percent: 100, detail: 'AI Recap generated!' });
+      setPipelineProgress({ running: false, stage: 'Idle', percent: 0, detail: '' });
+      setGeneratedRecap(
+        '【សាច់រឿងសង្ខេប】\n' +
+        'ពុំទាន់មានអត្ថបទសន្ទនាគ្រប់គ្រាន់សម្រាប់ការបង្កើតការសង្ខេបឡើយ។ សូមធ្វើការបកប្រែ ឬបញ្ចូលអត្ថបទរងជាមុនសិន។'
+      );
+      return;
+    }
 
-      const khmerDialogue = segments
-        .map((s) => s.translatedText.trim())
-        .filter((t) => t.length > 0);
+    const key = apiKeys.geminiApiKey?.trim();
+    if (key) {
+      try {
+        setPipelineProgress({
+          running: true,
+          stage: 'Gemini AI Summarizer',
+          percent: 65,
+          detail: 'Synthesizing story recap with Gemini AI...',
+        });
 
-      let summaryText = '';
-      if (khmerDialogue.length === 0) {
-        summaryText =
-          '【សាច់រឿងសង្ខេប】\n' +
-          'ពុំទាន់មានអត្ថបទសន្ទនាគ្រប់គ្រាន់សម្រាប់ការបង្កើតការសង្ខេបឡើយ។ សូមធ្វើការបកប្រែ ឬបញ្ចូលអត្ថបទរងជាមុនសិន។';
-      } else if (summaryLength === 'brief') {
-        const keyLines = khmerDialogue.slice(0, 3).join(' ');
-        summaryText =
-          '【សង្ខេបខ្លី - 30 វិនាទី】\n' +
-          `ឈុតឆាកសំខាន់ផ្តោតលើការប្រាស្រ័យទាក់ទងគ្នា៖ "${keyLines}"\n` +
-          'សកម្មភាពកើតឡើងយ៉ាងលឿន និងទាក់ទាញអារម្មណ៍ទស្សនិកជន។';
-      } else if (summaryLength === 'detailed') {
-        const scene1 = khmerDialogue.slice(0, Math.ceil(khmerDialogue.length / 3)).join(' ');
-        const scene2 = khmerDialogue.slice(Math.ceil(khmerDialogue.length / 3), Math.ceil((khmerDialogue.length * 2) / 3)).join(' ');
-        const scene3 = khmerDialogue.slice(Math.ceil((khmerDialogue.length * 2) / 3)).join(' ');
-        summaryText =
-          '【សេចក្តីសង្ខេបលម្អិតតាមឈុតឆាក】\n\n' +
-          `• ឈុតទី 1 (ដើមរឿង): ${scene1.substring(0, 160)}...\n\n` +
-          `• ឈុតទី 2 (បញ្ហាប្រឈម): ${scene2.substring(0, 160)}...\n\n` +
-          `• ឈុតទី 3 (ដំណោះស្រាយ): ${scene3.substring(0, 160)}...`;
-      } else {
-        const preview = khmerDialogue.slice(0, 5).join(' ');
-        summaryText =
-          '【សាច់រឿងសង្ខេបស្តង់ដារ】\n' +
-          `នៅក្នុងភាគនេះ ការសន្ទនាគន្លឹះរួមមាន៖ "${preview.substring(0, 220)}..."\n` +
-          'ដំណើររឿងបង្ហាញពីការវិវត្តនៃទំនាក់ទំនងតួអង្គ និងជម្លោះដ៏ស្វិតស្វាញដែលឈានទៅរកចំណុចកំពូលនៃសាច់រឿង។';
+        const lengthInstruction =
+          summaryLength === 'brief'
+            ? 'Short & punchy (30-second video hook for TikTok/Reels, 2-3 sentences in Khmer).'
+            : summaryLength === 'detailed'
+            ? 'Comprehensive breakdown dividing the episode into Scene 1 (Beginning), Scene 2 (Conflict), and Scene 3 (Resolution/Climax) in natural Khmer.'
+            : 'Standard narrative episode synopsis in 4-6 engaging sentences in natural Khmer.';
+
+        const prompt = `You are a professional film and drama scriptwriter. Summarize the following episode dialogue into an engaging story synopsis written in fluent, natural Khmer (ភាសាខ្មែរ).
+
+Style requirement: ${lengthInstruction}
+${sceneMatchMode ? 'Highlight dramatic character tensions and central conflict.' : ''}
+
+Dialogue Lines:
+${activeLines.slice(0, 80).join('\n')}
+
+Output solely the final Khmer synopsis with appropriate section titles:`;
+
+        const res = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(key)}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: prompt }] }],
+            }),
+          }
+        );
+
+        if (res.ok) {
+          const data = await res.json();
+          const candidateText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+          if (candidateText && candidateText.trim()) {
+            setGeneratedRecap(candidateText.trim());
+            setPipelineProgress({ running: false, stage: 'Complete', percent: 100, detail: 'AI Recap ready' });
+            setIsGenerating(false);
+            return;
+          }
+        }
+      } catch (err: any) {
+        console.warn('Gemini recap fetch failed, using local dialogue compile:', err);
       }
+    }
 
-      setGeneratedRecap(summaryText);
-    }, 1000);
+    // Honest local compilation fallback (no fake setTimeout simulation)
+    const dialogueSample = activeLines.slice(0, 15).join(' ');
+    let summaryText = '';
+    if (summaryLength === 'brief') {
+      summaryText =
+        '【សង្ខេបខ្លី (Local Digest)】\n' +
+        `ការសន្ទនាសំខាន់ៗដកស្រង់ចេញពីឈុតឆាក៖ ${dialogueSample.substring(0, 200)}...\n\n` +
+        'ℹ️ ចំណាំ៖ ដើម្បីទទួលបានការសង្ខេបកម្រិតខ្ពស់ដោយ Gemini AI សូមភ្ជាប់ Gemini API Key នៅក្នុងផ្ទាំង Preferences > API Keys។';
+    } else if (summaryLength === 'detailed') {
+      const third = Math.max(1, Math.ceil(activeLines.length / 3));
+      const s1 = activeLines.slice(0, third).join(' ');
+      const s2 = activeLines.slice(third, third * 2).join(' ');
+      const s3 = activeLines.slice(third * 2).join(' ');
+      summaryText =
+        '【សេចក្តីសង្ខេបតាមឈុតឆាក (Local Digest)】\n\n' +
+        `• ឈុតទី 1 (ដើមរឿង): ${s1.substring(0, 140)}...\n\n` +
+        `• ឈុតទី 2 (បញ្ហាប្រឈម): ${s2.substring(0, 140)}...\n\n` +
+        `• ឈុតទី 3 (ដំណោះស្រាយ): ${s3.substring(0, 140)}...\n\n` +
+        'ℹ️ ចំណាំ៖ នេះជាការរៀបចំឈុតឆាកក្នុងស្រុក។ បញ្ចូល Gemini API Key ដើម្បីវិភាគស៊ីជម្រៅដោយ AI។';
+    } else {
+      summaryText =
+        '【សាច់រឿងសង្ខេបស្តង់ដារ (Local Digest)】\n' +
+        `ការសន្ទនាសំខាន់ៗក្នុងភាគនេះ៖ ${dialogueSample.substring(0, 240)}...\n\n` +
+        'ℹ️ ចំណាំ៖ នេះជាការដកស្រង់អត្ថបទសន្ទនាក្នុងស្រុក។ សូមកំណត់ Gemini API Key នៅក្នុង Preferences ដើម្បីបង្កើតការសង្ខេបបែបនិទានរឿងដោយស្វ័យប្រវត្តិ។';
+    }
+
+    setGeneratedRecap(summaryText);
+    setPipelineProgress({ running: false, stage: 'Complete', percent: 100, detail: 'Local digest compiled' });
+    setIsGenerating(false);
   };
 
   const handleCopyToClipboard = () => {

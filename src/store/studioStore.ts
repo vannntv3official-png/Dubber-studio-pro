@@ -772,7 +772,7 @@ export const useStudioStore = create<StudioState>((set) => ({
     set({ vocalRemovalEngine });
   },
 
-  demucsFolderPath: localStorage.getItem(LOCAL_STORAGE_KEY_DEMUCS_PATH) || 'E:\\Document\\DAI Dubber\\dai-dubber__fixed\\DAI-Dubb',
+  demucsFolderPath: localStorage.getItem(LOCAL_STORAGE_KEY_DEMUCS_PATH) || '',
   setDemucsFolderPath: (demucsFolderPath) => {
     localStorage.setItem(LOCAL_STORAGE_KEY_DEMUCS_PATH, demucsFolderPath);
     set({ demucsFolderPath });
@@ -790,7 +790,7 @@ export const useStudioStore = create<StudioState>((set) => ({
     set({ transcriptionEngine });
   },
 
-  whisperFolderPath: localStorage.getItem(LOCAL_STORAGE_KEY_WHISPER_PATH) || 'E:\\Document\\DAI Dubber\\dai-dubber__fixed\\whisper-',
+  whisperFolderPath: localStorage.getItem(LOCAL_STORAGE_KEY_WHISPER_PATH) || '',
   setWhisperFolderPath: (whisperFolderPath) => {
     localStorage.setItem(LOCAL_STORAGE_KEY_WHISPER_PATH, whisperFolderPath);
     set({ whisperFolderPath });

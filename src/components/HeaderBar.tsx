@@ -78,12 +78,12 @@ export const HeaderBar: React.FC = () => {
       <div className="flex items-center gap-2.5">
         {/* Logo block */}
         <div className="w-7 h-7 rounded-lg bg-slate-900 dark:bg-zinc-800 flex items-center justify-center text-white font-bold text-[11px] shadow-sm shrink-0 border border-slate-700">
-          <span className="text-indigo-400">D</span>AI
+          <span className="text-indigo-400">D</span>SP
         </div>
 
         <div className="flex items-center gap-2">
           <span className="font-bold text-sm tracking-tight text-slate-900 dark:text-zinc-100">
-            DAI Dubber
+            Dubber Studio Pro
           </span>
 
           {/* PRO Badge — gradient amber/orange matching mockup */}

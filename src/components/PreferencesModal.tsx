@@ -10,7 +10,6 @@ import {
   Languages, 
   BookOpen, 
   Info, 
-  Gift, 
   Search, 
   X, 
   Check, 
@@ -116,20 +115,47 @@ export const PreferencesModal: React.FC = () => {
     }
   };
 
-  const handleTestLine = () => {
-    setTestFeedback(`Testing single line translation with ${transcribeModel}...`);
-    setTimeout(() => {
-      setTestFeedback(`✓ Test passed: ${transcribeModel} responded in 164ms (200 OK)`);
-      setTimeout(() => setTestFeedback(null), 3500);
-    }, 600);
+  const handleTestLine = async () => {
+    const key = apiKeys.geminiApiKey?.trim();
+    if (!key) {
+      setTestFeedback('⚠️ Please configure Gemini API key in API Keys tab first.');
+      setTimeout(() => setTestFeedback(null), 4000);
+      return;
+    }
+    setTestFeedback(`Connecting to ${transcribeModel}...`);
+    try {
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${key}`);
+      if (res.ok) {
+        setTestFeedback(`✓ Verified: Gemini API key is valid and connected (200 OK)`);
+      } else {
+        setTestFeedback(`⚠️ API responded with error ${res.status}: ${res.statusText}`);
+      }
+    } catch (e: any) {
+      setTestFeedback(`⚠️ Network connection error: ${e.message}`);
+    }
+    setTimeout(() => setTestFeedback(null), 4000);
   };
 
-  const handleTestReadScreen = () => {
-    setTestFeedback(`Testing Vision OCR with ${readScreenModel}...`);
-    setTimeout(() => {
-      setTestFeedback(`✓ Screen Vision OK: Model verified OCR coordinates on active viewport`);
-      setTimeout(() => setTestFeedback(null), 3500);
-    }, 600);
+  const handleTestReadScreen = async () => {
+    const key = apiKeys.geminiApiKey?.trim();
+    if (!key) {
+      setTestFeedback('⚠️ Vision OCR requires a configured Gemini API key.');
+      setTimeout(() => setTestFeedback(null), 4000);
+      return;
+    }
+    setTestFeedback(`Testing Vision endpoint with ${readScreenModel}...`);
+    try {
+      const modelClean = readScreenModel.split(' ')[0];
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelClean || 'gemini-1.5-flash'}?key=${key}`);
+      if (res.ok) {
+        setTestFeedback(`✓ Screen Vision endpoint verified (${modelClean || 'gemini-1.5-flash'})`);
+      } else {
+        setTestFeedback(`⚠️ Vision model check failed (${res.status})`);
+      }
+    } catch (e: any) {
+      setTestFeedback(`⚠️ Network error: ${e.message}`);
+    }
+    setTimeout(() => setTestFeedback(null), 4000);
   };
 
   // Key editing
@@ -193,26 +219,6 @@ export const PreferencesModal: React.FC = () => {
       setApiKeys({ geminiApiKey: topKey.key });
     }
   }, [cudaKeys]);
-
-  // Module 4: Cuda API Free Monthly Quota Tracker (1,000,000 free tokens/month)
-  const [cudaQuota, setCudaQuota] = useState<{ used: number; total: number; daysLeft: number }>(() => {
-    try {
-      const saved = localStorage.getItem('dubber_studio_cuda_quota');
-      if (saved) return JSON.parse(saved);
-    } catch {}
-    return { used: 342100, total: 1000000, daysLeft: 14 };
-  });
-
-  const handleRefreshCudaQuota = () => {
-    // Recalculate or verify real quota
-    const updated = {
-      used: Math.min(cudaQuota.total, cudaQuota.used + 1250),
-      total: 1000000,
-      daysLeft: Math.max(1, cudaQuota.daysLeft),
-    };
-    setCudaQuota(updated);
-    localStorage.setItem('dubber_studio_cuda_quota', JSON.stringify(updated));
-  };
 
   const [isAddingCudaKey, setIsAddingCudaKey] = useState(false);
   const [newCudaName, setNewCudaName] = useState('');
@@ -304,7 +310,14 @@ export const PreferencesModal: React.FC = () => {
     }
   };
 
-  const navItems = [
+  interface NavItem {
+    id: string;
+    label: string;
+    icon: React.ComponentType<{ className?: string }>;
+    hasDot?: boolean;
+  }
+
+  const navItems: NavItem[] = [
     { id: 'General', label: 'General', icon: SlidersVertical },
     { id: 'Account', label: 'Account', icon: CreditCard },
     { id: 'Theme', label: 'Theme', icon: Palette },
@@ -315,7 +328,6 @@ export const PreferencesModal: React.FC = () => {
     { id: 'Health', label: 'Health', icon: Laptop },
     { id: 'Tutorials', label: 'Tutorials', icon: BookOpen },
     { id: 'About', label: 'About', icon: Info },
-    { id: 'Bonus', label: 'Bonus', icon: Gift, hasDot: true },
   ];
 
   const filteredNavItems = useMemo(() => {
@@ -1416,39 +1428,23 @@ export const PreferencesModal: React.FC = () => {
                         )}
                       </div>
 
-                      {/* Module 4: Cuda API Free Quota Meter */}
-                      <div className="p-3.5 rounded-2xl bg-gradient-to-r from-indigo-500/10 via-purple-500/10 to-pink-500/10 border border-indigo-200 dark:border-indigo-800 space-y-2">
+                      {/* Module 4: API Status & Direct Gateway */}
+                      <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-zinc-800/50 border border-slate-200 dark:border-zinc-750 space-y-2">
                         <div className="flex items-center justify-between text-xs font-bold text-slate-800 dark:text-zinc-200">
                           <span className="flex items-center gap-1.5">
-                            <Zap className="w-3.5 h-3.5 text-amber-500" />
-                            <span>Cuda API Monthly Quota Meter</span>
+                            <Zap className="w-3.5 h-3.5 text-indigo-500" />
+                            <span>API Gateway & Connection Status</span>
                           </span>
-                          <span className="font-mono text-indigo-600 dark:text-indigo-400 font-bold">
-                            {cudaQuota.used.toLocaleString()} / {cudaQuota.total.toLocaleString()} tokens ({((cudaQuota.used / cudaQuota.total) * 100).toFixed(1)}%)
+                          <span className={`text-[11px] font-bold flex items-center gap-1 ${isConnected ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-500'}`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${isConnected ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+                            {isConnected ? 'Active & Ready' : 'Key Required'}
                           </span>
                         </div>
-                        <div className="w-full bg-slate-200 dark:bg-zinc-800 h-2 rounded-full overflow-hidden">
-                          <div
-                            className="bg-gradient-to-r from-indigo-500 to-purple-500 h-full rounded-full transition-all duration-500"
-                            style={{ width: `${Math.min(100, (cudaQuota.used / cudaQuota.total) * 100)}%` }}
-                          />
-                        </div>
-                        <div className="flex items-center justify-between text-[10px] text-slate-500 dark:text-zinc-400">
-                          <span>1,000,000 free tokens/month · Renews in {cudaQuota.daysLeft} days</span>
-                          <div className="flex items-center gap-2">
-                            <button
-                              onClick={handleRefreshCudaQuota}
-                              className="text-[9.5px] text-indigo-600 dark:text-indigo-400 hover:underline font-bold"
-                              title="Sync usage data"
-                            >
-                              Sync Usage
-                            </button>
-                            <span className="text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-1">
-                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                              Quota Active
-                            </span>
-                          </div>
-                        </div>
+                        <p className="text-[11px] text-slate-500 dark:text-zinc-400 leading-relaxed">
+                          {isConnected 
+                            ? 'Your API key is securely loaded and validated. Requests route directly to official provider endpoints without third-party proxies.'
+                            : 'Configure your Gemini or OpenAI API key above to enable translation, speech transcription, and AI script recaps.'}
+                        </p>
                       </div>
 
                       {/* Primary Model Selector */}
@@ -1913,81 +1909,7 @@ export const PreferencesModal: React.FC = () => {
                   </div>
                 )}
 
-                {/* TAB 2: Bonus — DEXTSTYLING PROMO CARD */}
-                {activeTab === 'Bonus' && (
-                  <div className="rounded-2xl bg-gradient-to-b from-[#0f2557] via-[#102a63] to-[#0a193b] text-white p-6 flex flex-col items-center text-center shadow-lg border border-indigo-900/50 space-y-3">
-                    {/* Top Pill Badge */}
-                    <div className="border border-amber-400/40 bg-slate-900/60 text-amber-300 text-[11px] font-bold px-3 py-1 rounded-full shadow-xs">
-                      🎁 FREE BONUS APP
-                    </div>
 
-                    {/* App Icon: ornate blue/silver badge with Khmer letter "ក" */}
-                    <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-blue-700 via-indigo-600 to-sky-400 p-[2px] shadow-xl shadow-blue-500/30">
-                      <div className="w-full h-full bg-[#0d1f47] rounded-[14px] flex items-center justify-center border border-sky-300/30">
-                        <span className="font-bold text-3xl font-sans text-transparent bg-clip-text bg-gradient-to-br from-amber-200 via-white to-amber-400">
-                          ក
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Title Row */}
-                    <div className="flex items-center gap-2">
-                      <h3 className="text-xl font-black tracking-tight text-white">
-                        DextStyling
-                      </h3>
-                      <span className="px-1.5 py-0.5 rounded bg-amber-500 text-slate-950 font-black text-[10px] tracking-wider">
-                        NEW
-                      </span>
-                    </div>
-
-                    {/* Description */}
-                    <p className="text-xs text-sky-100/90 max-w-md leading-relaxed">
-                      Style movie titles, poster text and thumbnails — pick a look and DextStyling writes the full image prompt for you. Copy it, then paste it into any AI image generator.
-                    </p>
-
-                    {/* 3-Column Feature Steps Grid */}
-                    <div className="grid grid-cols-3 gap-3 w-full my-3">
-                      <div className="p-3 rounded-xl bg-white/5 border border-white/10 flex flex-col items-center gap-1.5">
-                        <div className="w-8 h-8 rounded-lg bg-amber-500/20 text-amber-300 flex items-center justify-center font-serif font-black text-base">
-                          T
-                        </div>
-                        <span className="text-[11px] font-bold text-sky-100">Type your title</span>
-                      </div>
-
-                      <div className="p-3 rounded-xl bg-white/5 border border-white/10 flex flex-col items-center gap-1.5">
-                        <div className="w-8 h-8 rounded-lg bg-amber-500/20 text-amber-300 flex items-center justify-center text-sm">
-                          🎨
-                        </div>
-                        <span className="text-[11px] font-bold text-sky-100">Pick a style</span>
-                      </div>
-
-                      <div className="p-3 rounded-xl bg-white/5 border border-white/10 flex flex-col items-center gap-1.5">
-                        <div className="w-8 h-8 rounded-lg bg-amber-500/20 text-amber-300 flex items-center justify-center text-sm">
-                          📋
-                        </div>
-                        <span className="text-[11px] font-bold text-sky-100">Copy the prompt</span>
-                      </div>
-                    </div>
-
-                    {/* 3 Info Pills Row */}
-                    <div className="flex items-center gap-2 text-[10px] font-semibold text-sky-200">
-                      <span className="px-2.5 py-1 rounded-full bg-white/10 border border-white/10">Khmer + English titles</span>
-                      <span className="px-2.5 py-1 rounded-full bg-white/10 border border-white/10">Windows · macOS</span>
-                      <span className="px-2.5 py-1 rounded-full bg-white/10 border border-white/10">100% Free</span>
-                    </div>
-
-                    {/* Full-Width CTA Button */}
-                    <a
-                      href="https://github.com"
-                      target="_blank"
-                      rel="noreferrer"
-                      className="mt-2 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-white font-bold py-3 rounded-xl w-full flex items-center justify-center gap-2 shadow-lg shadow-orange-500/30 active:scale-[0.99] transition-all text-xs"
-                    >
-                      <Download className="w-4 h-4" />
-                      <span>⬇ Download DextStyling</span>
-                    </a>
-                  </div>
-                )}
 
                 {/* TAB 3: Pronunciation Dictionary */}
                 {activeTab === 'Pronunciation' && (
@@ -2436,27 +2358,30 @@ export const PreferencesModal: React.FC = () => {
                   <div className="space-y-4 text-xs">
                     <div>
                       <h4 className="font-bold text-sm text-slate-900 dark:text-zinc-100">
-                        License & Account Details
+                        Studio Pro Edition & Environment
                       </h4>
                       <p className="text-[11px] text-slate-500 dark:text-zinc-400">
-                        Manage your DAI Dubber PRO license and device activations.
+                        Local workstation workspace configuration and credential security.
                       </p>
                     </div>
 
                     <div className="p-4 rounded-xl border border-slate-200 dark:border-zinc-800 bg-slate-50/50 dark:bg-zinc-950/40 space-y-2.5">
                       <div className="flex items-center justify-between">
-                        <span className="font-semibold text-slate-700 dark:text-zinc-300">License Status:</span>
-                        <span className="px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 font-bold text-[11px]">
-                          Active · Lifetime PRO
+                        <span className="font-semibold text-slate-700 dark:text-zinc-300">Edition:</span>
+                        <span className="px-2 py-0.5 rounded-full bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 font-bold text-[11px]">
+                          Dubber Studio Pro (Production)
                         </span>
                       </div>
-                      <div className="flex items-center justify-between font-mono">
-                        <span className="text-slate-600 dark:text-zinc-400">License Key:</span>
-                        <span className="text-slate-800 dark:text-zinc-200">DAI-PRO-8892-KHMER-2026</span>
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-600 dark:text-zinc-400">Deployment:</span>
+                        <span className="text-slate-800 dark:text-zinc-200 font-medium">Local Hardware Desktop Node</span>
                       </div>
                       <div className="flex items-center justify-between">
-                        <span className="text-slate-600 dark:text-zinc-400">Device Activations:</span>
-                        <span className="font-bold text-slate-700 dark:text-zinc-300">1 of 3 devices</span>
+                        <span className="text-slate-600 dark:text-zinc-400">Credential Vault:</span>
+                        <span className="text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                          Local Protected Storage (Zero Cloud Leakage)
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -2588,15 +2513,15 @@ export const PreferencesModal: React.FC = () => {
                 {activeTab === 'About' && (
                   <div className="space-y-4 text-xs">
                     <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 rounded-xl overflow-hidden border border-slate-200 dark:border-zinc-800 shrink-0 bg-black">
-                        <img src="/icon.png" alt="DAI Dubber" className="w-full h-full object-cover" />
+                      <div className="w-12 h-12 rounded-xl overflow-hidden border border-slate-200 dark:border-zinc-800 shrink-0 bg-black flex items-center justify-center">
+                        <span className="font-extrabold text-base text-purple-400 font-mono">DSP</span>
                       </div>
                       <div>
                         <h4 className="font-black text-base text-slate-900 dark:text-zinc-100">
-                          DAI Dubber PRO
+                          Dubber Studio Pro
                         </h4>
                         <p className="text-[11px] text-slate-500 dark:text-zinc-400 font-mono">
-                          v2.4.0 (Desktop Native · Windows / macOS)
+                          v2.4.0 (Windows Native Edition)
                         </p>
                       </div>
                     </div>
@@ -2604,7 +2529,7 @@ export const PreferencesModal: React.FC = () => {
                     <div className="p-3.5 rounded-xl border border-slate-200 dark:border-zinc-800 bg-slate-50 dark:bg-zinc-900/60 space-y-1.5 text-slate-600 dark:text-zinc-400">
                       <p>Engineered for high-volume film and drama dubbing with natural Khmer syllable synchronization.</p>
                       <p className="text-[11px] text-slate-500">Built with Tauri 2, React 19, Tailwind CSS, Motion, Zustand, FFmpeg 7.1, and Rust.</p>
-                      <p className="text-[11px] text-slate-500">© 2026 DAI Dubber Studio. All rights reserved.</p>
+                      <p className="text-[11px] text-slate-500">© 2026 Dubber Studio Pro. All rights reserved.</p>
                     </div>
                   </div>
                 )}

@@ -399,7 +399,7 @@ export const SubtitleDataTable: React.FC = () => {
                   Series &amp; Episode
                 </div>
                 <div className="text-xs font-semibold text-slate-800 dark:text-zinc-200 px-1 mb-2 truncate">
-                  {projectName || '嫌疑人的秘密_EP12'}
+                  {projectName || 'Series_EP01'}
                 </div>
                 <div className="grid grid-cols-4 gap-1 mb-2">
                   {['EP 01', 'EP 02', 'EP 03', 'EP 04', 'EP 05', 'EP 06', 'EP 07', 'EP 08'].map((ep) => (
