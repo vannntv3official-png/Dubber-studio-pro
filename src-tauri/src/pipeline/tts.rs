@@ -3,8 +3,19 @@ use crate::models::{DubSegment, SegmentStatus, TtsProvider, ApiKeysConfig};
 use crate::pipeline::ffmpeg::{get_audio_duration_ms, sync_segment_duration, create_command};
 
 pub fn pace_khmer_text(text: &str) -> String {
-    let re = regex::Regex::new(r"([។៕?!])(?=\S)").unwrap();
-    re.replace_all(text, "$1 ").trim().to_string()
+    let mut result = String::with_capacity(text.len() + 16);
+    let mut chars = text.chars().peekable();
+    while let Some(ch) = chars.next() {
+        result.push(ch);
+        if matches!(ch, '។' | '៕' | '?' | '!') {
+            if let Some(&next_ch) = chars.peek() {
+                if !next_ch.is_whitespace() {
+                    result.push(' ');
+                }
+            }
+        }
+    }
+    result.trim().to_string()
 }
 
 pub fn resolve_persona_and_emotion(
@@ -332,4 +343,33 @@ async fn synthesize_elevenlabs(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_pace_khmer_text() {
+        assert_eq!(
+            pace_khmer_text("សួស្តី!តើអ្នកសុខសប្បាយទេ?ខ្ញុំសុខសប្បាយ។ពិតមែនហើយ៕"),
+            "សួស្តី! តើអ្នកសុខសប្បាយទេ? ខ្ញុំសុខសប្បាយ។ ពិតមែនហើយ៕"
+        );
+        assert_eq!(
+            pace_khmer_text("ជំរាបសួរ។ បាទ"),
+            "ជំរាបសួរ។ បាទ"
+        );
+    }
+
+    #[test]
+    fn test_resolve_persona_and_emotion() {
+        let (voice, rate, pitch) = resolve_persona_and_emotion(
+            "km-KH-PisethNeural",
+            Some("baby"),
+            Some("happy"),
+        );
+        assert_eq!(voice, "km-KH-SreymomNeural");
+        assert!(rate.contains('%'));
+        assert!(pitch.contains("Hz"));
+    }
 }
