@@ -15,6 +15,7 @@ pub fn run() {
             commands::run_auto_dub_pipeline,
             commands::isolate_bgm,
             commands::regenerate_segment_tts,
+            commands::generate_segments_audio,
             commands::auto_fit_segment,
             commands::export_dubbed_video,
             commands::export_srt_file,

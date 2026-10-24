@@ -62,6 +62,25 @@ pub fn resolve_persona_and_emotion(
     (base_voice.to_string(), rate_attr, pitch_attr)
 }
 
+pub fn fit_rate_for_duration(measured_dur_ms: u64, current_rate_pct: f32, target_dur_ms: u64) -> Option<String> {
+    if target_dur_ms < 200 || measured_dur_ms <= target_dur_ms {
+        return None;
+    }
+    let ratio = measured_dur_ms as f64 / target_dur_ms as f64;
+    if ratio <= 1.06 {
+        return None;
+    }
+    // Baseline rate multiplier
+    let baseline_mult = 1.0 + (current_rate_pct / 100.0);
+    // Adjusted rate multiplier clamped conservatively to 1.22x to prevent unnatural robotic audio
+    let adjusted_mult = (baseline_mult * ratio.min(1.15) as f32).clamp(0.80, 1.22);
+    let new_rate_pct = (adjusted_mult - 1.0) * 100.0;
+    if (new_rate_pct - current_rate_pct).abs() < 2.0 {
+        return None;
+    }
+    Some(format!("{new_rate_pct:+.0}%"))
+}
+
 pub fn polish_tts_audio(input_wav: &str, output_wav: &str, duration_ms: u64) -> Result<(), String> {
     let dur_sec = duration_ms as f64 / 1000.0;
     let fade_out = 0.035;
@@ -89,6 +108,12 @@ pub fn polish_tts_audio(input_wav: &str, output_wav: &str, duration_ms: u64) -> 
 
     if !status.success() {
         return Err("Audio polish filter failed".to_string());
+    }
+
+    if let Ok(meta) = std::fs::metadata(output_wav) {
+        if meta.len() < 128 {
+            return Err("Polished audio file is empty or corrupted".to_string());
+        }
     }
 
     Ok(())
@@ -149,6 +174,19 @@ pub async fn synthesize_segment(
         return Err(e);
     }
 
+    let target_duration_ms = segment.end_ms.saturating_sub(segment.start_ms);
+
+    // If edge-tts is used and audio exceeds target subtitle window by >6%,
+    // perform native AI speech rate fitting before downstream time-stretching!
+    if matches!(provider, TtsProvider::EdgeTts) && target_duration_ms > 200 {
+        if let Ok(raw_dur) = get_audio_duration_ms(&raw_path) {
+            let current_rate_pct = rate_attr.trim_end_matches('%').parse::<f32>().unwrap_or(0.0);
+            if let Some(fitted_rate) = fit_rate_for_duration(raw_dur, current_rate_pct, target_duration_ms) {
+                let _ = synthesize_edge_tts(&paced_text, &selected_voice, &fitted_rate, &pitch_attr, &raw_path).await;
+            }
+        }
+    }
+
     // Compute TTS duration
     let source_audio_for_sync = match get_audio_duration_ms(&raw_path) {
         Ok(dur_ms) => {
@@ -170,7 +208,6 @@ pub async fn synthesize_segment(
     segment.tts_raw_path = Some(source_audio_for_sync.clone());
 
     // Sync with segment duration window
-    let target_duration_ms = segment.end_ms.saturating_sub(segment.start_ms);
     match sync_segment_duration(&source_audio_for_sync, &stretched_path, target_duration_ms) {
         Ok(ratio) => {
             segment.tts_stretched_path = Some(stretched_path);
@@ -208,24 +245,38 @@ async fn synthesize_edge_tts(
         .await
         .map_err(|e| format!("Failed to write text to temp file: {e}"))?;
 
-    // Try direct edge-tts CLI with rate and pitch
-    let mut cmd = create_command("edge-tts");
-    cmd.args([
-        "--voice", selected_voice,
-        "--rate", rate_attr,
-        "--pitch", pitch_attr,
-        "-f", &temp_txt,
-        "--write-media", &temp_mp3,
-    ]);
+    let mut last_err = String::new();
+    let mut edge_ok = false;
 
-    let edge_status = cmd.status();
-    let mut edge_ok = match edge_status {
-        Ok(s) if s.success() => true,
-        _ => false,
-    };
+    // Up to 3 attempts with exponential backoff for transient network glitches
+    for attempt in 1..=3 {
+        // Try direct edge-tts CLI with rate and pitch
+        let mut cmd = create_command("edge-tts");
+        cmd.args([
+            "--voice", selected_voice,
+            "--rate", rate_attr,
+            "--pitch", pitch_attr,
+            "-f", &temp_txt,
+            "--write-media", &temp_mp3,
+        ]);
 
-    // Fall back to python -m edge_tts if needed
-    if !edge_ok {
+        let edge_status = cmd.status();
+        match edge_status {
+            Ok(s) if s.success() => {
+                if std::path::Path::new(&temp_mp3).exists() && std::fs::metadata(&temp_mp3).map(|m| m.len()).unwrap_or(0) > 100 {
+                    edge_ok = true;
+                    break;
+                }
+            }
+            Ok(s) => {
+                last_err = format!("edge-tts exited with code {:?}", s.code());
+            }
+            Err(e) => {
+                last_err = e.to_string();
+            }
+        }
+
+        // Fall back to python -m edge_tts if direct CLI failed
         let mut py_cmd = std::process::Command::new("python");
         py_cmd.env("PYTHONIOENCODING", "utf-8").env("PYTHONUTF8", "1");
         #[cfg(windows)]
@@ -243,9 +294,14 @@ async fn synthesize_edge_tts(
         ]);
 
         if let Ok(py_status) = py_cmd.status() {
-            if py_status.success() {
+            if py_status.success() && std::path::Path::new(&temp_mp3).exists() && std::fs::metadata(&temp_mp3).map(|m| m.len()).unwrap_or(0) > 100 {
                 edge_ok = true;
+                break;
             }
+        }
+
+        if attempt < 3 {
+            tokio::time::sleep(std::time::Duration::from_millis(600 * attempt as u64)).await;
         }
     }
 
@@ -254,7 +310,9 @@ async fn synthesize_edge_tts(
 
     if !edge_ok {
         let _ = tokio::fs::remove_file(&temp_mp3).await;
-        return Err("edge-tts synthesis failed. Please ensure edge-tts is installed via `pip install edge-tts`.".to_string());
+        return Err(format!(
+            "edge-tts synthesis failed after 3 attempts ({last_err}). Please ensure edge-tts is installed via `pip install edge-tts` and network is connected."
+        ));
     }
 
     // Convert mp3 to PCM 16-bit WAV with FFmpeg
@@ -371,5 +429,16 @@ mod tests {
         assert_eq!(voice, "km-KH-SreymomNeural");
         assert!(rate.contains('%'));
         assert!(pitch.contains("Hz"));
+    }
+
+    #[test]
+    fn test_fit_rate_for_duration() {
+        // Speech is 3000ms, cue window is 2000ms (ratio 1.5x)
+        let faster = fit_rate_for_duration(3000, 0.0, 2000);
+        assert!(faster.is_some());
+        assert!(faster.unwrap().starts_with('+'));
+
+        // Speech is 2050ms, cue is 2000ms (ratio 1.025x <= 1.06x -> no adjustment needed)
+        assert_eq!(fit_rate_for_duration(2050, 0.0, 2000), None);
     }
 }

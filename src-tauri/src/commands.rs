@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 use tauri::ipc::Channel;
 use uuid::Uuid;
-use crate::models::{ProjectConfig, DubSegment, ApiKeysConfig, PipelineEvent, TtsProvider, LlmProvider, OrigAudioRange};
+use crate::models::{ProjectConfig, DubSegment, SegmentStatus, ApiKeysConfig, PipelineEvent, TtsProvider, LlmProvider, OrigAudioRange};
 use crate::pipeline::{ffmpeg, transcriber, translator, tts};
 
 pub fn get_project_dir(project_id: &str) -> Result<PathBuf, String> {
@@ -166,6 +166,64 @@ pub async fn regenerate_segment_tts(
     let project_dir = get_project_dir(&config.id)?;
     tts::synthesize_segment(&mut segment, &config.tts_provider, &project_dir, &api_keys).await?;
     Ok(segment)
+}
+
+#[tauri::command]
+pub async fn generate_segments_audio(
+    mut segments: Vec<DubSegment>,
+    target_ids: Option<Vec<String>>,
+    config: ProjectConfig,
+    api_keys: ApiKeysConfig,
+    channel: Channel<PipelineEvent>,
+) -> Result<Vec<DubSegment>, String> {
+    let project_dir = get_project_dir(&config.id)?;
+    let target_set: Option<std::collections::HashSet<String>> = target_ids.map(|ids| ids.into_iter().collect());
+
+    let indices_to_process: Vec<usize> = segments
+        .iter()
+        .enumerate()
+        .filter(|(_, seg)| {
+            if let Some(ref set) = target_set {
+                set.contains(&seg.id)
+            } else {
+                seg.status != SegmentStatus::Ready || seg.tts_raw_path.is_none()
+            }
+        })
+        .map(|(idx, _)| idx)
+        .collect();
+
+    let total = indices_to_process.len().max(1);
+
+    for (processed_count, &idx) in indices_to_process.iter().enumerate() {
+        let seg = &mut segments[idx];
+        let _ = channel.send(PipelineEvent::StageProgress {
+            stage: "Voice Synthesis".to_string(),
+            percent: ((processed_count * 100) / total) as u8,
+            detail: format!("Generating audio for cue {} of {}...", processed_count + 1, total),
+        });
+
+        seg.status = SegmentStatus::Synthesizing;
+        let _ = channel.send(PipelineEvent::SegmentUpdated { segment: seg.clone() });
+
+        let res = tts::synthesize_segment(seg, &config.tts_provider, &project_dir, &api_keys).await;
+        if let Err(e) = res {
+            log::warn!("Failed to synthesize segment {}: {e}", seg.id);
+        }
+
+        let _ = channel.send(PipelineEvent::SegmentUpdated { segment: seg.clone() });
+    }
+
+    // Refresh srt preview
+    let srt_preview = project_dir.join("subtitles.srt").to_str().unwrap().to_string();
+    let _ = ffmpeg::export_srt_file(&segments, &srt_preview);
+
+    let _ = channel.send(PipelineEvent::StageProgress {
+        stage: "Completed".to_string(),
+        percent: 100,
+        detail: format!("Voice synthesis completed for {} segments.", indices_to_process.len()),
+    });
+
+    Ok(segments)
 }
 
 #[tauri::command]

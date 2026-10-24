@@ -12,9 +12,9 @@ import {
   Users,
   Settings,
 } from 'lucide-react';
-import { invoke, convertFileSrc } from '@tauri-apps/api/core';
+import { invoke, convertFileSrc, Channel } from '@tauri-apps/api/core';
 import { useStudioStore } from '../store/studioStore';
-import { DubSegment, MOVIE_PERSONAS, MOVIE_EMOTIONS } from '../types/studio';
+import { DubSegment, PipelineEvent, MOVIE_PERSONAS, MOVIE_EMOTIONS } from '../types/studio';
 import { PipelineProgress } from './PipelineProgress';
 
 export const SubtitleDataTable: React.FC = () => {
@@ -23,6 +23,7 @@ export const SubtitleDataTable: React.FC = () => {
     projectName,
     apiKeys,
     segments,
+    setSegments,
     selectedSegmentIds,
     activeSegmentId,
     setActiveSegmentId,
@@ -41,12 +42,14 @@ export const SubtitleDataTable: React.FC = () => {
     setPresetsModalOpen,
     setProjectName,
     setSearchQuery,
+    setPipelineProgress,
   } = useStudioStore();
 
   const [selectedMaleVoice, setSelectedMaleVoice] = useState('km-KH-PisethNeural');
   const [selectedFemaleVoice, setSelectedFemaleVoice] = useState('km-KH-SreymomNeural');
   const [batchPersona, setBatchPersona] = useState('narrator');
   const [batchEmotion, setBatchEmotion] = useState('natural');
+  const [isGeneratingBatchAudio, setIsGeneratingBatchAudio] = useState(false);
   const [playingSegmentId, setPlayingSegmentId] = useState<string | null>(null);
   const audioPlayerRef = useRef<HTMLAudioElement | null>(null);
 
@@ -143,6 +146,72 @@ export const SubtitleDataTable: React.FC = () => {
       });
     } else if (activeSegmentId) {
       updateSegmentPartial(activeSegmentId, { emotion: batchEmotion });
+    }
+  };
+
+  const handleBatchGenerateAudio = async (targetOnlySelected: boolean = false) => {
+    if (!project || segments.length === 0 || isGeneratingBatchAudio) return;
+
+    const targetIds = targetOnlySelected && selectedSegmentIds.length > 0
+      ? selectedSegmentIds
+      : undefined;
+
+    setIsGeneratingBatchAudio(true);
+    setPipelineProgress({
+      running: true,
+      stage: 'Voice Synthesis',
+      percent: 0,
+      detail: `Preparing audio generation for ${targetIds ? targetIds.length : segments.length} subtitles...`,
+    });
+
+    try {
+      const channel = new Channel<PipelineEvent>();
+      channel.onmessage = (event) => {
+        switch (event.type) {
+          case 'StageProgress':
+            setPipelineProgress({
+              running: true,
+              stage: event.stage,
+              percent: event.percent,
+              detail: event.detail,
+            });
+            break;
+          case 'SegmentUpdated':
+            updateSegment(event.segment);
+            break;
+          default:
+            break;
+        }
+      };
+
+      const updated = await invoke<DubSegment[]>('generate_segments_audio', {
+        segments,
+        targetIds,
+        config: project,
+        apiKeys,
+        channel,
+      });
+
+      if (Array.isArray(updated)) {
+        setSegments(updated);
+      }
+
+      setPipelineProgress({
+        running: false,
+        stage: 'Completed',
+        percent: 100,
+        detail: 'Audio generation completed successfully.',
+      });
+    } catch (err) {
+      console.error('Batch audio generation failed:', err);
+      setPipelineProgress({
+        running: false,
+        stage: 'Error',
+        percent: 0,
+        detail: `Voice synthesis failed: ${err}`,
+      });
+    } finally {
+      setIsGeneratingBatchAudio(false);
     }
   };
 
@@ -289,6 +358,27 @@ export const SubtitleDataTable: React.FC = () => {
           >
             <Search className="w-3.5 h-3.5" />
             <span>Find &amp; Replace</span>
+          </button>
+
+          {/* [🔊 Generate Audio] — Indigo high-visibility action button */}
+          <button
+            onClick={() => handleBatchGenerateAudio(selectedSegmentIds.length > 0)}
+            disabled={segments.length === 0 || isGeneratingBatchAudio}
+            className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white font-bold transition-all shadow-2xs disabled:cursor-not-allowed disabled:opacity-45"
+            title={
+              selectedSegmentIds.length > 0
+                ? `Synthesize voice for ${selectedSegmentIds.length} selected subtitle(s)`
+                : 'Synthesize voice for all pending subtitles'
+            }
+          >
+            <Volume2 className={`w-3.5 h-3.5 ${isGeneratingBatchAudio ? 'animate-bounce text-amber-300' : ''}`} />
+            <span>
+              {isGeneratingBatchAudio
+                ? 'Synthesizing...'
+                : selectedSegmentIds.length > 0
+                ? `Generate Audio (${selectedSegmentIds.length})`
+                : 'Generate Audio (All)'}
+            </span>
           </button>
 
           {/* [📚 Series] — Interactive dropdown */}
